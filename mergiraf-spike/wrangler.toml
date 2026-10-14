@@ -1,0 +1,18 @@
+name = "mergiraf-spike"
+main = "src/index.ts"
+compatibility_date = "2026-10-05"
+compatibility_flags = ["nodejs_compat"]
+
+[[containers]]
+class_name = "MergeContainer"
+image = "./container/Dockerfile"
+max_instances = 4
+instance_type = "standard-1"
+
+[[durable_objects.bindings]]
+name = "MERGE"
+class_name = "MergeContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MergeContainer"]

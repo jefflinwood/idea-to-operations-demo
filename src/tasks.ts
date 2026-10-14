@@ -1,0 +1,14 @@
+// The Vendor Access Expiration tasks beyond the hero tasks (src/hero.ts). Each is a small, independent page for the vendor-access app.
+// "Symbols:" names the top-level symbols the agent expects to touch; agents turn them into lease requests.
+// "Requires:" lists substrings (separated by ;;) the agent's code must contain.
+export interface TaskSpec { title: string; description: string }
+
+const route = "Register the route in src/index.ts.";
+const layout = "Build the page with page(...) from src/layout.ts and read vendors from new VendorService().listVendors() in src/vendor-service.ts. Use only listVendors(); never call getVendor, and look vendors up by filtering the list.";
+
+export const TASKS: TaskSpec[] = [
+	{ title: "Add expiring-soon page", description: `Add a page GET /expiring?days=<n> in a new file src/expiring.ts exporting function expiring(request). ${layout} Show a table of the vendors whose access ends within n days of REFERENCE_DATE (from src/vendor-service.ts), soonest first, with vendor, sponsor, expiry date, days left and a badge: "bad" if already expired, "warn" if 14 days or fewer, otherwise "ok". n defaults to 30; show a short line saying which window is shown, and a link to expiring?days=90. ${route}\nSymbols: src/expiring.ts::expiring\nRequires: page(` },
+	{ title: "Add sponsor renewal page", description: `Add a page GET /renewals?sponsor=<email> in a new file src/renewals.ts exporting function renewals(request). ${layout} Show a table of pending renewal requests { vendor, sponsor, requestedUntil, status } built from at least 5 hard-coded requests that use vendor names from the vendor list, filtered to the sponsor when given. List the distinct sponsors as links to renewals?sponsor=<email> above the table, and show a "info" badge with the status. ${route}\nSymbols: src/renewals.ts::renewals\nRequires: page(` },
+	{ title: "Add access audit log page", description: `Add a page GET /audit in a new file src/audit.ts exporting function audit(request) and function recordAccessEvent(vendor, action). Keep an in-memory array of { at, vendor, action } events, seeded with at least 6 realistic events (expiry, renewal, disabled) for vendors from the vendor list, and show them newest first in a table with a badge per action. ${layout} ${route}\nSymbols: src/audit.ts::audit, src/audit.ts::recordAccessEvent\nRequires: page(` },
+	{ title: "Add expiration policy page", description: `Add a page GET /policy in a new file src/policy.ts exporting function policy(request) and const DEFAULT_EXPIRY_DAYS = 90. Show the rules as cards: default expiry 90 days, warning 14 days before expiry, renewal must be requested by the vendor's sponsor, 7 days of grace. Build the page with page(...) from src/layout.ts. ${route}\nSymbols: src/policy.ts::policy\nRequires: page(` },
+];

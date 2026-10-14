@@ -1,0 +1,4 @@
+# Deployed by Workers Builds: every push to main of this Artifacts repository runs `npx wrangler deploy`.
+name = "vendor-access"
+main = "src/index.ts"
+compatibility_date = "2026-10-05"

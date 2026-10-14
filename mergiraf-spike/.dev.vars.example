@@ -1,0 +1,2 @@
+# Use the same generated value as SPIKE_KEY in the root .dev.vars/.prod.vars.
+SPIKE_KEY=GENERATE_WITH_PNPM_SETUP

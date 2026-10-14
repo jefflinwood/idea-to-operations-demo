@@ -1,0 +1,1134 @@
+version = "0.1.0"
+
+[project]
+name = "Idea to Operations Hub"
+version = "0.1.0"
+description = "Idea to Operations Hub. Build is the capability shown here: outcome-oriented software collaboration on the Zebric + Cloudflare Artifacts agent swarm."
+
+[project.runtime]
+min_version = "0.1.0"
+
+[ux]
+pattern = "dashboard@v1"
+
+[ux.navigation]
+model = "sidebar"
+primary = ["Build", "Decisions", "Artifacts", "Activity"]
+
+[design_system]
+name = "outcomes"
+extends = "minimal"
+tokens = { primary = "#6b3fc4", accent = "#7aa7ff", radius = "0.6rem", font = "Inter, -apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, sans-serif" }
+
+[design_adapter]
+name = "default"
+version = "1.0"
+
+[entity.Repository]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "name", type = "Text", required = true, unique = true },
+  { name = "artifactsRepo", type = "Text" },
+  { name = "mainSha", type = "Text" },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.Repository.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Issue]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "repositoryId", type = "Ref", ref = "Repository.id", required = true, index = true },
+  { name = "title", type = "Text", required = true },
+  { name = "body", type = "LongText" },
+  { name = "status", type = "Enum", values = ["open", "closed"], default = "open" },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.Issue.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Outcome]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "title", type = "Text", required = true },
+  { name = "statement", type = "Text", required = true },
+  { name = "owner", type = "Text" },
+  { name = "seeded", type = "Boolean", default = false },
+  { name = "status", type = "Enum", values = ["shaping", "building", "ready_for_launch", "operating"], default = "shaping", index = true, write = "command-only", commands = ["StartBuild", "MarkOutcomeReady", "LaunchOutcome"] },
+  { name = "level", type = "Integer", default = 0, write = "command-only", commands = ["AdoptOutcome"] },
+  { name = "healthNote", type = "Text" },
+  { name = "repositoryId", type = "Text", index = true },
+  { name = "idea", type = "LongText" },
+  { name = "problem", type = "LongText" },
+  { name = "experience", type = "LongText" },
+  { name = "criteria", type = "JSON" },
+  { name = "assumptions", type = "JSON" },
+  { name = "questions", type = "JSON" },
+  { name = "evidence", type = "JSON" },
+  { name = "readiness", type = "Integer", default = 0 },
+  { name = "buildStartedAt", type = "DateTime", write = "command-only", commands = ["StartBuild"] },
+  { name = "readyAt", type = "DateTime", write = "command-only", commands = ["MarkOutcomeReady"] },
+  { name = "launchedAt", type = "DateTime", write = "command-only", commands = ["LaunchOutcome"] },
+  { name = "adoptedAt", type = "DateTime", write = "command-only", commands = ["AdoptOutcome"] },
+  { name = "teamPromotionRequestedAt", type = "DateTime", write = "command-only", commands = ["RequestTeamPromotion"] },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.Outcome.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Task]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "issueId", type = "Ref", ref = "Issue.id", index = true },
+  { name = "repositoryId", type = "Ref", ref = "Repository.id", required = true, index = true },
+  { name = "title", type = "Text", required = true },
+  { name = "description", type = "LongText" },
+  { name = "status", type = "Enum", values = ["ready", "claimed", "working", "submitted", "completed"], default = "ready", write = "command-only", commands = ["ClaimTask", "StartChange", "SubmitTask", "CompleteTask"] },
+  { name = "claimedBy", type = "Text", write = "command-only", commands = ["ClaimTask"] },
+  { name = "claimedAt", type = "DateTime", write = "command-only", commands = ["ClaimTask"] },
+  { name = "startedAt", type = "DateTime", write = "command-only", commands = ["StartChange"] },
+  { name = "changeId", type = "Text", write = "command-only", commands = ["StartChange"] },
+  { name = "submittedAt", type = "DateTime", write = "command-only", commands = ["SubmitTask"] },
+  { name = "completedAt", type = "DateTime", write = "command-only", commands = ["CompleteTask"] },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.Task.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Change]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "taskId", type = "Ref", ref = "Task.id", required = true, index = true },
+  { name = "repositoryId", type = "Ref", ref = "Repository.id", required = true, index = true },
+  { name = "title", type = "Text" },
+  { name = "actorId", type = "Text", required = true },
+  { name = "status", type = "Enum", values = ["working", "submitted", "integrating", "verifying", "ready", "needs_decision", "revision", "integrated", "deployed", "completed", "abandoned"], default = "working", write = "command-only", commands = ["SubmitChange", "BeginIntegration", "BeginVerification", "MarkReady", "ReopenIntegration", "RequestDecision", "ResolveDecision", "IntegrateChange", "CompleteChange"] },
+  { name = "baseSha", type = "Text" },
+  { name = "headSha", type = "Text", write = "command-only", commands = ["SubmitChange"] },
+  { name = "integratedSha", type = "Text", write = "command-only", commands = ["IntegrateChange"] },
+  { name = "forkRepo", type = "Text" },
+  { name = "submittedAt", type = "DateTime", write = "command-only", commands = ["SubmitChange"] },
+  { name = "completedAt", type = "DateTime", write = "command-only", commands = ["CompleteChange"] },
+  { name = "createdAt", type = "DateTime", default = "now" },
+  { name = "updatedAt", type = "DateTime", default = "now" }
+]
+
+[entity.Change.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Change.relations]
+checks = { type = "hasMany", entity = "Check", foreign_key = "changeId" }
+decisions = { type = "hasMany", entity = "Decision", foreign_key = "changeId" }
+events = { type = "hasMany", entity = "ChangeEvent", foreign_key = "changeId" }
+
+[entity.SymbolLease]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "repositoryId", type = "Ref", ref = "Repository.id", required = true, index = true },
+  { name = "taskId", type = "Ref", ref = "Task.id", required = true, index = true },
+  { name = "actorId", type = "Text", required = true },
+  { name = "symbol", type = "Text", required = true, index = true },
+  { name = "expiresAt", type = "DateTime", required = true },
+  { name = "status", type = "Enum", values = ["active", "released"], default = "active", write = "command-only", commands = ["ReleaseSymbolLease"] },
+  { name = "activeKey", type = "Text", unique = true, nullable = true },
+  { name = "releasedAt", type = "DateTime", write = "command-only", commands = ["ReleaseSymbolLease"] },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.SymbolLease.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Check]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "changeId", type = "Ref", ref = "Change.id", required = true, index = true },
+  { name = "stage", type = "Enum", values = ["structural_merge", "typescript", "tests", "deploy"], required = true },
+  { name = "outcome", type = "Enum", values = ["passed", "failed", "not_run"], required = true },
+  { name = "detail", type = "LongText" },
+  { name = "recordedBy", type = "Text" },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.Check.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.Decision]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "changeId", type = "Ref", ref = "Change.id", required = true, index = true },
+  { name = "question", type = "LongText", required = true },
+  { name = "options", type = "JSON" },
+  { name = "status", type = "Enum", values = ["pending", "resolved"], default = "pending" },
+  { name = "choice", type = "Text" },
+  { name = "resolvedBy", type = "Text" },
+  { name = "resolvedAt", type = "DateTime" },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.Decision.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.ChangeEvent]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "changeId", type = "Ref", ref = "Change.id", index = true },
+  { name = "taskId", type = "Ref", ref = "Task.id", index = true },
+  { name = "actorId", type = "Text" },
+  { name = "kind", type = "Text", required = true },
+  { name = "detail", type = "LongText" },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.ChangeEvent.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+[entity.AgentRun]
+fields = [
+  { name = "id", type = "ULID", primary_key = true },
+  { name = "changeId", type = "Ref", ref = "Change.id", index = true },
+  { name = "taskId", type = "Ref", ref = "Task.id", index = true },
+  { name = "actorId", type = "Text" },
+  { name = "kind", type = "Enum", values = ["implement", "revise"], required = true },
+  { name = "parentRunId", type = "Text" },
+  { name = "model", type = "Text" },
+  { name = "promptHash", type = "Text" },
+  { name = "instruction", type = "LongText" },
+  { name = "context", type = "LongText" },
+  { name = "attempts", type = "LongText" },
+  { name = "summary", type = "LongText" },
+  { name = "headSha", type = "Text" },
+  { name = "files", type = "LongText" },
+  { name = "durationMs", type = "Integer" },
+  { name = "createdAt", type = "DateTime", default = "now" }
+]
+
+[entity.AgentRun.access]
+read = "authenticated"
+create = "authenticated"
+update = "authenticated"
+delete = "authenticated"
+
+# --- Outcome commands: the human commitments the product is built around -------------------------------------
+
+[command.StartBuild]
+entity = "Outcome"
+label = "Build Outcome"
+policy = "actor.roles contains 'decider'"
+availableWhen = "record.status == 'shaping'"
+mutations = { status = "building", buildStartedAt = "now" }
+scopes = ["outcomes.commit"]
+handler = "StartBuild"
+
+[command.MarkOutcomeReady]
+entity = "Outcome"
+label = "Mark ready for launch"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'building'"
+mutations = { status = "ready_for_launch", readyAt = "now" }
+scopes = ["changes.integrate"]
+handler = "MarkOutcomeReady"
+
+[command.LaunchOutcome]
+entity = "Outcome"
+label = "Launch"
+policy = "actor.roles contains 'decider'"
+availableWhen = "record.status == 'ready_for_launch'"
+mutations = { status = "operating", launchedAt = "now" }
+scopes = ["outcomes.commit"]
+handler = "LaunchOutcome"
+
+# Written by the Launch workflow once the app is live on Workers. Informational.
+[command.RecordDeployment]
+entity = "Outcome"
+label = "Record deployment"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'operating'"
+mutations = {}
+scopes = ["changes.integrate"]
+handler = "RecordDeployment"
+
+[command.RecordDeployment.input.detail]
+type = "Text"
+required = true
+description = "JSON: outcome, sha, liveSha, live, smoke results, url"
+
+[command.AdoptOutcome]
+entity = "Outcome"
+label = "Adopt as Level 1"
+policy = "actor.roles contains 'decider'"
+availableWhen = "record.status == 'operating' && record.level == 0"
+mutations = { level = 1, adoptedAt = "now" }
+scopes = ["outcomes.commit"]
+handler = "AdoptOutcome"
+
+[command.RequestTeamPromotion]
+entity = "Outcome"
+label = "Promote to Level 2"
+policy = "actor.roles contains 'decider'"
+availableWhen = "record.level == 1"
+mutations = { teamPromotionRequestedAt = "now" }
+scopes = ["outcomes.commit"]
+handler = "RequestTeamPromotion"
+
+[command.ClaimTask]
+entity = "Task"
+label = "Claim"
+policy = "actor.roles contains 'worker'"
+availableWhen = "record.status == 'ready'"
+mutations = { status = "claimed", claimedBy = "actor.id", claimedAt = "now" }
+scopes = ["tasks.claim"]
+handler = "ClaimTask"
+
+[command.StartChange]
+entity = "Task"
+label = "Start change"
+policy = "actor.roles contains 'worker' && record.claimedBy == actor.id"
+availableWhen = "record.status == 'claimed'"
+mutations = { status = "working", startedAt = "now" }
+scopes = ["tasks.work"]
+handler = "StartChange"
+
+[command.AcquireSymbolLease]
+entity = "Task"
+label = "Acquire symbol lease"
+policy = "actor.roles contains 'worker' && record.claimedBy == actor.id"
+availableWhen = "record.status == 'working'"
+mutations = {}
+scopes = ["leases.manage"]
+handler = "AcquireSymbolLease"
+
+[command.AcquireSymbolLease.input.symbol]
+type = "Text"
+required = true
+description = "Top-level symbol, file.ts::name"
+
+[command.AcquireSymbolLease.input.ttlSeconds]
+type = "Integer"
+description = "Lease lifetime, default 600"
+
+[command.RecordLeaseRisk]
+entity = "Task"
+label = "Record lease risk"
+policy = "actor.roles contains 'worker' && record.claimedBy == actor.id"
+availableWhen = "record.status == 'working'"
+mutations = {}
+scopes = ["leases.manage"]
+handler = "RecordLeaseRisk"
+
+[command.RecordLeaseRisk.input.detail]
+type = "Text"
+required = true
+description = "Clef's judgment as JSON: holder, conflict, severity, action, mode"
+
+# The provenance of one agent attempt: what it was told, what context it inherited, what it produced. Informational.
+[command.RecordAgentRun]
+entity = "Task"
+label = "Record agent run"
+policy = "actor.roles contains 'worker' && record.claimedBy == actor.id"
+availableWhen = "record.status == 'working' || record.status == 'submitted'"
+mutations = {}
+scopes = ["runs.record"]
+handler = "RecordAgentRun"
+
+[command.RecordAgentRun.input.kind]
+type = "Text"
+required = true
+
+[command.RecordAgentRun.input.model]
+type = "Text"
+
+[command.RecordAgentRun.input.promptHash]
+type = "Text"
+
+[command.RecordAgentRun.input.instruction]
+type = "LongText"
+
+[command.RecordAgentRun.input.context]
+type = "LongText"
+
+[command.RecordAgentRun.input.attempts]
+type = "LongText"
+
+[command.RecordAgentRun.input.summary]
+type = "LongText"
+
+[command.RecordAgentRun.input.headSha]
+type = "Text"
+
+[command.RecordAgentRun.input.files]
+type = "LongText"
+
+[command.RecordAgentRun.input.durationMs]
+type = "Integer"
+
+[command.SubmitTask]
+entity = "Task"
+label = "Submit task"
+policy = "actor.roles contains 'worker' && record.claimedBy == actor.id"
+availableWhen = "record.status == 'working'"
+mutations = { status = "submitted", submittedAt = "now" }
+scopes = ["tasks.work"]
+handler = "SubmitTask"
+
+[command.CompleteTask]
+entity = "Task"
+label = "Complete task"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'submitted'"
+mutations = { status = "completed", completedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "CompleteTask"
+
+[command.ReleaseSymbolLease]
+entity = "SymbolLease"
+label = "Release lease"
+policy = "(actor.roles contains 'worker' && record.actorId == actor.id) || actor.roles contains 'integrator'"
+availableWhen = "record.status == 'active'"
+mutations = { status = "released", releasedAt = "now" }
+scopes = ["leases.manage"]
+handler = "ReleaseSymbolLease"
+
+[command.SubmitChange]
+entity = "Change"
+label = "Submit change"
+policy = "actor.roles contains 'worker' && record.actorId == actor.id"
+availableWhen = "record.status == 'working' || record.status == 'revision'"
+mutations = { status = "submitted", headSha = "input.headSha", submittedAt = "now", updatedAt = "now" }
+scopes = ["changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+handler = "SubmitChange"
+
+[command.SubmitChange.input.headSha]
+type = "Text"
+required = true
+
+[command.BeginIntegration]
+entity = "Change"
+label = "Begin integration"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'submitted'"
+mutations = { status = "integrating", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "BeginIntegration"
+
+[command.BeginVerification]
+entity = "Change"
+label = "Begin verification"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'integrating'"
+mutations = { status = "verifying", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "BeginVerification"
+
+[command.RecordCheck]
+entity = "Change"
+label = "Record check"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'integrating' || record.status == 'verifying'"
+mutations = { updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "RecordCheck"
+
+[command.RecordCheck.input.stage]
+type = "Enum"
+values = ["structural_merge", "typescript", "tests", "deploy"]
+required = true
+
+[command.RecordCheck.input.outcome]
+type = "Enum"
+values = ["passed", "failed", "not_run"]
+required = true
+
+[command.RecordCheck.input.detail]
+type = "LongText"
+
+[command.MarkReady]
+entity = "Change"
+label = "Mark ready"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'verifying'"
+mutations = { status = "ready", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "MarkReady"
+
+[command.ReopenIntegration]
+entity = "Change"
+label = "Reopen integration"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'ready'"
+mutations = { status = "integrating", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "ReopenIntegration"
+
+[command.RequestDecision]
+entity = "Change"
+label = "Request decision"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'verifying' || record.status == 'integrating'"
+mutations = { status = "needs_decision", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "RequestDecision"
+
+[command.RequestDecision.input.question]
+type = "LongText"
+required = true
+
+[command.RequestDecision.input.options]
+type = "JSON"
+
+[command.ResolveDecision]
+entity = "Change"
+label = "Resolve decision"
+policy = "actor.roles contains 'decider'"
+availableWhen = "record.status == 'needs_decision'"
+mutations = { updatedAt = "now" }
+scopes = ["decisions.resolve"]
+handler = "ResolveDecision"
+
+[command.ResolveDecision.input.decisionId]
+type = "Text"
+required = true
+
+[command.ResolveDecision.input.choice]
+type = "Text"
+required = true
+
+[command.IntegrateChange]
+entity = "Change"
+label = "Integrate"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'ready'"
+mutations = { status = "integrated", integratedSha = "input.integratedSha", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "IntegrateChange"
+
+[command.IntegrateChange.input.integratedSha]
+type = "Text"
+required = true
+
+[command.CompleteChange]
+entity = "Change"
+label = "Complete change"
+policy = "actor.roles contains 'integrator'"
+availableWhen = "record.status == 'integrated' || record.status == 'deployed'"
+mutations = { status = "completed", completedAt = "now", updatedAt = "now" }
+scopes = ["changes.integrate"]
+handler = "CompleteChange"
+
+[page."/"]
+title = "Build"
+auth = "required"
+layout = "custom"
+live = true
+
+[page."/".query.outcomes]
+entity = "Outcome"
+orderBy = { createdAt = "asc" }
+limit = 50
+
+[page."/".query.tasks]
+entity = "Task"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/".query.changes]
+entity = "Change"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/".query.decisions]
+entity = "Decision"
+orderBy = { createdAt = "desc" }
+limit = 100
+
+[page."/".query.pending]
+entity = "Decision"
+where = { status = "pending" }
+limit = 50
+
+[page."/".template]
+engine = "liquid"
+type = "file"
+source = "templates/outcomes.liquid"
+
+[page."/outcomes/:id"]
+title = "Outcome"
+auth = "required"
+layout = "custom"
+live = true
+
+[page."/outcomes/:id".query.outcome]
+entity = "Outcome"
+where = { id = "$params.id" }
+limit = 1
+
+[page."/outcomes/:id".query.tasks]
+entity = "Task"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/outcomes/:id".query.changes]
+entity = "Change"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/outcomes/:id".query.checks]
+entity = "Check"
+orderBy = { createdAt = "asc" }
+limit = 1000
+
+[page."/outcomes/:id".query.decisions]
+entity = "Decision"
+orderBy = { createdAt = "desc" }
+limit = 100
+
+[page."/outcomes/:id".query.events]
+entity = "ChangeEvent"
+orderBy = { createdAt = "desc" }
+limit = 200
+
+[page."/outcomes/:id".query.pending]
+entity = "Decision"
+where = { status = "pending" }
+limit = 50
+
+[page."/outcomes/:id".template]
+engine = "liquid"
+type = "file"
+source = "templates/outcome.liquid"
+
+[page."/outcomes/:id/changes"]
+title = "Artifacts"
+auth = "required"
+layout = "custom"
+live = true
+
+[page."/outcomes/:id/changes".query.outcomes]
+entity = "Outcome"
+where = { id = "$params.id" }
+limit = 1
+
+[page."/outcomes/:id/changes".query.tasks]
+entity = "Task"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/outcomes/:id/changes".query.changes]
+entity = "Change"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/outcomes/:id/changes".query.checks]
+entity = "Check"
+orderBy = { createdAt = "asc" }
+limit = 1000
+
+[page."/outcomes/:id/changes".query.decisions]
+entity = "Decision"
+orderBy = { createdAt = "desc" }
+limit = 100
+
+[page."/outcomes/:id/changes".query.events]
+entity = "ChangeEvent"
+orderBy = { createdAt = "desc" }
+limit = 200
+
+[page."/outcomes/:id/changes".query.runs]
+entity = "AgentRun"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/outcomes/:id/changes".query.pending]
+entity = "Decision"
+where = { status = "pending" }
+limit = 50
+
+[page."/outcomes/:id/changes".template]
+engine = "liquid"
+type = "file"
+source = "templates/changes.liquid"
+
+[page."/artifacts"]
+title = "Artifacts"
+auth = "required"
+layout = "custom"
+live = true
+
+[page."/artifacts".query.outcomes]
+entity = "Outcome"
+orderBy = { createdAt = "asc" }
+limit = 50
+
+[page."/artifacts".query.tasks]
+entity = "Task"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/artifacts".query.changes]
+entity = "Change"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/artifacts".query.checks]
+entity = "Check"
+orderBy = { createdAt = "asc" }
+limit = 1000
+
+[page."/artifacts".query.decisions]
+entity = "Decision"
+orderBy = { createdAt = "desc" }
+limit = 100
+
+[page."/artifacts".query.events]
+entity = "ChangeEvent"
+orderBy = { createdAt = "desc" }
+limit = 200
+
+[page."/artifacts".query.runs]
+entity = "AgentRun"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/artifacts".query.pending]
+entity = "Decision"
+where = { status = "pending" }
+limit = 50
+
+[page."/artifacts".template]
+engine = "liquid"
+type = "file"
+source = "templates/changes.liquid"
+
+[page."/activity"]
+title = "Activity"
+auth = "required"
+layout = "custom"
+live = true
+
+[page."/activity".query.outcomes]
+entity = "Outcome"
+orderBy = { createdAt = "asc" }
+limit = 50
+
+[page."/activity".query.tasks]
+entity = "Task"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/activity".query.changes]
+entity = "Change"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/activity".query.checks]
+entity = "Check"
+orderBy = { createdAt = "asc" }
+limit = 1000
+
+[page."/activity".query.decisions]
+entity = "Decision"
+orderBy = { createdAt = "desc" }
+limit = 100
+
+[page."/activity".query.events]
+entity = "ChangeEvent"
+orderBy = { createdAt = "desc" }
+limit = 200
+
+[page."/activity".query.pending]
+entity = "Decision"
+where = { status = "pending" }
+limit = 50
+
+[page."/activity".template]
+engine = "liquid"
+type = "file"
+source = "templates/activity.liquid"
+
+[page."/decisions"]
+title = "Decisions"
+auth = "required"
+layout = "custom"
+live = true
+
+[page."/decisions".query.outcomes]
+entity = "Outcome"
+orderBy = { createdAt = "asc" }
+limit = 50
+
+[page."/decisions".query.tasks]
+entity = "Task"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/decisions".query.changes]
+entity = "Change"
+orderBy = { createdAt = "asc" }
+limit = 500
+
+[page."/decisions".query.checks]
+entity = "Check"
+orderBy = { createdAt = "asc" }
+limit = 1000
+
+[page."/decisions".query.decisions]
+entity = "Decision"
+orderBy = { createdAt = "desc" }
+limit = 100
+
+[page."/decisions".query.events]
+entity = "ChangeEvent"
+orderBy = { createdAt = "desc" }
+limit = 200
+
+[page."/decisions".query.pending]
+entity = "Decision"
+where = { status = "pending" }
+limit = 50
+
+[page."/decisions".template]
+engine = "liquid"
+type = "file"
+source = "templates/decisions.liquid"
+
+[page."/runs"]
+title = "Runs"
+auth = "required"
+layout = "list"
+live = true
+
+[page."/runs".query.runs]
+entity = "Repository"
+orderBy = { createdAt = "desc" }
+limit = 25
+
+[page."/runs/:id"]
+title = "Swarm"
+auth = "required"
+layout = "board"
+live = true
+
+[page."/runs/:id".query.tasks]
+entity = "Task"
+where = { repositoryId = "$params.id" }
+orderBy = { createdAt = "asc" }
+limit = 250
+
+[page."/runs/:id".board]
+query = "tasks"
+groupBy = "status"
+columns = [
+  { value = "ready", label = "Queued" },
+  { value = "claimed", label = "Claimed" },
+  { value = "working", label = "Working" },
+  { value = "submitted", label = "Submitted" },
+  { value = "completed", label = "Completed" }
+]
+card = { title = "title", href = "/changes/{changeId}", fields = ["claimedBy"] }
+
+[page."/runs/:id/changes"]
+title = "Changes"
+auth = "required"
+layout = "board"
+live = true
+
+[page."/runs/:id/changes".query.changes]
+entity = "Change"
+where = { repositoryId = "$params.id" }
+orderBy = { createdAt = "asc" }
+limit = 250
+
+[page."/runs/:id/changes".board]
+query = "changes"
+groupBy = "status"
+columns = [
+  { value = "working", label = "Working" },
+  { value = "submitted", label = "Submitted" },
+  { value = "integrating", label = "Merging with main" },
+  { value = "verifying", label = "Type-checking" },
+  { value = "ready", label = "Landing" },
+  { value = "needs_decision", label = "Needs a human" },
+  { value = "revision", label = "Revising" },
+  { value = "completed", label = "Completed" }
+]
+card = { title = "title", href = "/changes/{id}", fields = ["actorId", "headSha"] }
+
+[page."/changes/:id"]
+title = "Change"
+auth = "required"
+layout = "detail"
+live = true
+
+[page."/changes/:id".query.change]
+entity = "Change"
+where = { id = "$params.id" }
+
+[page."/changes/:id".query.checks]
+entity = "Check"
+where = { changeId = "$params.id" }
+orderBy = { createdAt = "asc" }
+limit = 100
+
+[page."/changes/:id".query.events]
+entity = "ChangeEvent"
+where = { changeId = "$params.id" }
+orderBy = { createdAt = "asc" }
+limit = 200
+
+[page."/changes/:id".query.decisions]
+entity = "Decision"
+where = { changeId = "$params.id" }
+orderBy = { createdAt = "asc" }
+limit = 20
+
+[page."/decisions/:id"]
+title = "Decision"
+auth = "required"
+layout = "detail"
+live = true
+
+[page."/decisions/:id".query.decision]
+entity = "Decision"
+where = { id = "$params.id" }
+
+[page."/decisions/:id".actionBar]
+title = "A human needs to decide"
+description = "Zebric stopped this change: it passed Git and the structural merge but fails verification. Your choice resumes the durable workflow."
+statusField = "status"
+
+[[page."/decisions/:id".actionBar.actions]]
+label = "Return for revision"
+workflow = "ResolveDecisionAction"
+style = "primary"
+payload = { choice = "return_for_revision" }
+visibleWhen = { status = "pending" }
+successMessage = "Returned for revision. The workflow has resumed."
+
+[[page."/decisions/:id".actionBar.actions]]
+label = "Preserve old contract"
+workflow = "ResolveDecisionAction"
+style = "secondary"
+payload = { choice = "preserve_contract" }
+visibleWhen = { status = "pending" }
+successMessage = "Recorded. The workflow has resumed."
+
+[[page."/decisions/:id".actionBar.actions]]
+label = "Abandon change"
+workflow = "ResolveDecisionAction"
+style = "danger"
+payload = { choice = "abandon" }
+visibleWhen = { status = "pending" }
+confirm = "Abandon this change?"
+successMessage = "Change abandoned."
+
+# The seam to the Cloudflare Workflow that is waiting for the human (implemented in src/bridge.ts).
+[service.changeflow]
+description = "Signals the durable Cloudflare ChangeWorkflow."
+
+[service.changeflow.operations.start_build]
+description = "Start the agent build for an Outcome."
+
+[service.changeflow.operations.verify_live]
+description = "Check that the Worker deployed by Workers Builds serves the commit on main and that every page renders."
+
+[service.changeflow.operations.signal_decision]
+description = "Send the human's decision to the waiting ChangeWorkflow instance."
+
+# What the Decision page's buttons run: the same ResolveDecision command agents' policies protect, then the signal.
+[workflow.ResolveDecisionAction]
+description = "A human resolves a pending Decision from the UI."
+trigger = { manual = true }
+
+[[workflow.ResolveDecisionAction.steps]]
+type = "command"
+command = "ResolveDecision"
+recordId = "{{ variables.data.record.changeId }}"
+input = { decisionId = "{{ variables.data.record.id }}", choice = "{{ variables.data.payload.choice }}" }
+
+[[workflow.ResolveDecisionAction.steps]]
+type = "service"
+service = "changeflow"
+operation = "signal_decision"
+[workflow.ResolveDecisionAction.steps.params]
+changeId = "{{ variables.data.record.changeId }}"
+decisionId = "{{ variables.data.record.id }}"
+choice = "{{ variables.data.payload.choice }}"
+
+[auth]
+providers = ["email"]
+
+[[auth.apiKeys]]
+name = "seeder"
+keyEnv = "SEED_API_KEY"
+scopes = ["*"]
+
+[[auth.apiKeys]]
+name = "integrator"
+keyEnv = "INTEGRATOR_API_KEY"
+agentId = "integrator"
+roles = ["integrator"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.repository.create", "entity.repository.update", "entity.issue.list", "entity.issue.get", "entity.issue.create", "entity.issue.update", "entity.task.list", "entity.task.get", "entity.task.create", "entity.task.update", "entity.change.list", "entity.change.get", "entity.change.create", "entity.change.update", "entity.symbollease.list", "entity.symbollease.get", "entity.symbollease.create", "entity.symbollease.update", "entity.check.list", "entity.check.get", "entity.check.create", "entity.check.update", "entity.decision.list", "entity.decision.get", "entity.decision.create", "entity.decision.update", "entity.changeevent.list", "entity.changeevent.get", "entity.changeevent.create", "entity.changeevent.update", "entity.agentrun.list", "entity.agentrun.get", "changes.integrate", "leases.manage", "entity.outcome.list", "entity.outcome.get", "entity.outcome.update"]
+
+[[auth.apiKeys]]
+name = "human"
+keyEnv = "HUMAN_API_KEY"
+agentId = "human-decider"
+roles = ["decider"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "entity.agentrun.list", "entity.agentrun.get", "entity.outcome.list", "entity.outcome.get", "decisions.resolve", "outcomes.commit"]
+
+[[auth.apiKeys]]
+name = "agent-1"
+keyEnv = "AGENT1_API_KEY"
+agentId = "agent-1"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-2"
+keyEnv = "AGENT2_API_KEY"
+agentId = "agent-2"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-3"
+keyEnv = "AGENT3_API_KEY"
+agentId = "agent-3"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-4"
+keyEnv = "AGENT4_API_KEY"
+agentId = "agent-4"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-5"
+keyEnv = "AGENT5_API_KEY"
+agentId = "agent-5"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-6"
+keyEnv = "AGENT6_API_KEY"
+agentId = "agent-6"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-7"
+keyEnv = "AGENT7_API_KEY"
+agentId = "agent-7"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-8"
+keyEnv = "AGENT8_API_KEY"
+agentId = "agent-8"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-9"
+keyEnv = "AGENT9_API_KEY"
+agentId = "agent-9"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+[[auth.apiKeys]]
+name = "agent-10"
+keyEnv = "AGENT10_API_KEY"
+agentId = "agent-10"
+roles = ["worker"]
+scopes = ["entity.repository.list", "entity.repository.get", "entity.issue.list", "entity.issue.get", "entity.task.list", "entity.task.get", "entity.change.list", "entity.change.get", "entity.symbollease.list", "entity.symbollease.get", "entity.check.list", "entity.check.get", "entity.decision.list", "entity.decision.get", "entity.changeevent.list", "entity.changeevent.get", "tasks.claim", "tasks.work", "leases.manage", "changes.submit", "runs.record", "entity.agentrun.list", "entity.agentrun.get"]
+
+# --- Outcome actions the pages' buttons run -----------------------------------------------------------------
+
+[workflow.StartBuildAction]
+description = "The human commits to the Outcome; the agent organization starts building it."
+trigger = { manual = true }
+
+[[workflow.StartBuildAction.steps]]
+type = "command"
+command = "StartBuild"
+recordId = "{{ variables.data.record.id }}"
+
+[[workflow.StartBuildAction.steps]]
+type = "service"
+service = "changeflow"
+operation = "start_build"
+[workflow.StartBuildAction.steps.params]
+outcomeId = "{{ variables.data.record.id }}"
+
+[workflow.LaunchAction]
+description = "Launch the finished Outcome."
+trigger = { manual = true }
+
+[[workflow.LaunchAction.steps]]
+type = "command"
+command = "LaunchOutcome"
+recordId = "{{ variables.data.record.id }}"
+
+[[workflow.LaunchAction.steps]]
+type = "service"
+service = "changeflow"
+operation = "verify_live"
+[workflow.LaunchAction.steps.params]
+outcomeId = "{{ variables.data.record.id }}"
+
+[workflow.AdoptAction]
+description = "The builder accepts responsibility: Level 0 to Level 1."
+trigger = { manual = true }
+
+[[workflow.AdoptAction.steps]]
+type = "command"
+command = "AdoptOutcome"
+recordId = "{{ variables.data.record.id }}"
+
+[workflow.PromoteAction]
+description = "Ask for Level 2 (team) promotion."
+trigger = { manual = true }
+
+[[workflow.PromoteAction.steps]]
+type = "command"
+command = "RequestTeamPromotion"
+recordId = "{{ variables.data.record.id }}"
+
+[ui]
+render_mode = "server"
+theme = "default"
+view_transitions = true

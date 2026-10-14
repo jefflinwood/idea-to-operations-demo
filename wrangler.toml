@@ -1,0 +1,69 @@
+name = "outcomes-demo"
+main = "worker.ts"
+compatibility_date = "2026-10-05"
+compatibility_flags = ["nodejs_compat"]
+
+[[rules]]
+type = "Text"
+globs = ["**/*.toml", "**/*.html", "**/*.liquid", "**/*.css"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "outcomes-demo-db"
+# Replace with the ID from `pnpm exec wrangler d1 create outcomes-demo-db` before deploying.
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Zebric's own durable job runner.
+[[workflows]]
+name = "outcomes-demo-zebric"
+binding = "WORKFLOWS"
+class_name = "ZebricWorkflow"
+
+[vars]
+AGENT_MODEL = "@cf/moonshotai/kimi-k2.7-code"
+# Smart leases (Clef): "off", "advise" (record the risk only) or "wait" (hold off while the risk is high).
+CLEF_LEASES = "advise"
+# The launched app is its own Worker, deployed by Workers Builds from this persistent Artifacts repository.
+BASE_REPO = "vendor-access"
+APP_URL = "http://localhost:18801"
+BETTER_AUTH_URL = "http://localhost:18800"
+ORIGIN = "http://localhost:18800"
+# Credentials: run `pnpm setup`; see .dev.vars.example and README.md.
+
+
+[[artifacts]]
+binding = "ARTIFACTS"
+namespace = "default"
+
+[ai]
+binding = "AI"
+
+[[durable_objects.bindings]]
+name = "COORDINATOR"
+class_name = "Coordinator"
+
+[[durable_objects.bindings]]
+name = "WORKER_AGENT"
+class_name = "WorkerAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Coordinator", "WorkerAgent"]
+
+# Workflow that integrates each submitted change into current main.
+[[workflows]]
+name = "outcomes-demo-change"
+binding = "CHANGE_WORKFLOW"
+class_name = "ChangeWorkflow"
+
+# After Launch: waits for Workers Builds to deploy main, then checks the live app.
+[[workflows]]
+name = "outcomes-demo-live"
+binding = "LIVE_WORKFLOW"
+class_name = "LiveWorkflow"
+
+# Mergiraf + tsc container (phase1), reached through a service binding.
+[[services]]
+binding = "MERGERAF"
+service = "mergiraf-spike"

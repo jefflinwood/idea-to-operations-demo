@@ -1,0 +1,15 @@
+allowBuilds:
+  better-sqlite3: false
+  msgpackr-extract: false
+  core-js-pure: false
+  esbuild: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@zebric/agent@0.9.0'
+  - '@zebric/mcp-server@0.9.0'
+  - '@zebric/notifications@0.9.0'
+  - '@zebric/observability@0.9.0'
+  - '@zebric/runtime-core@0.9.0'
+  - '@zebric/runtime-hono@0.9.0'
+  - '@zebric/runtime-node@0.9.0'
+  - '@zebric/runtime-worker@0.9.0'

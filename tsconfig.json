@@ -1,0 +1,1 @@
+{ "compilerOptions": { "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "types": [], "strict": true, "skipLibCheck": true, "noEmit": true, "lib": ["ES2022", "ESNext.Disposable"] }, "include": ["*.ts", "src/**/*.ts"] }

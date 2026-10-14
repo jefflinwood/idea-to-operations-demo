@@ -1,0 +1,16 @@
+<div class="wrap">
+  <header>
+    <h1>Activity</h1>
+    <p class="lede">Activity feed for agents and users.</p>
+  </header>
+  {% for o in data.outcomes %}{% unless o.seeded %}
+    {% assign p = o | project: data %}
+    <section class="sect">
+      <div class="spread"><h2>{{ p.title }}</h2><a class="link" href="/outcomes/{{ o.id }}">Back to outcome &rarr;</a></div>
+      {% if p.activity.size == 0 %}<p class="empty">No activity yet.</p>{% endif %}
+      <ul class="feed">
+        {% for a in p.activity %}<li class="{{ a.tone }}"><i class="m"></i><span class="tx">{{ a.text }}</span><span class="tm">{{ a.at | formatDate: "datetime" }}</span></li>{% endfor %}
+      </ul>
+    </section>
+  {% endunless %}{% endfor %}
+</div>

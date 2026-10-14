@@ -1,0 +1,38 @@
+<div class="wrap">
+  <header>
+    <h1>Decisions</h1>
+    <p class="lede">Decisions that have been escalated from the agent to the owner</p>
+  </header>
+  {% for o in data.outcomes %}{% unless o.seeded %}
+    {% assign p = o | project: data %}
+    <section class="sect">
+      <div class="spread"><h2>{{ p.title }}</h2><a class="link" href="/outcomes/{{ o.id }}">Back to outcome &rarr;</a></div>
+      {% if p.pendingDecision %}
+      <section class="decide">
+        <h2>Your decision{% if p.pendingDecision.count > 1 %} <span class="more-waiting">{{ p.pendingDecision.count | minus: 1 }} more waiting on other agents</span>{% endif %}</h2>
+        <p class="q">{{ p.pendingDecision.headline }}</p>
+        <p class="why">{{ p.pendingDecision.reason }}</p>
+        <div class="opts">
+          {% for opt in p.pendingDecision.options %}
+          <div class="opt{% if opt.recommended %} rec{% endif %}">
+            <div><div class="t">{% if opt.recommended %}<span class="rec-tag">Recommended</span>{% endif %}{{ opt.label }}</div><div class="d">{{ opt.description }}</div></div>
+            <!--action:ResolveDecisionAction|Decision|{{ p.pendingDecision.id }}|/decisions|{{ opt.label }}|btn{% if opt.recommended %} primary{% endif %}|{"choice":"{{ opt.id }}"}-->
+          </div>
+          {% endfor %}
+        </div>
+        {% if p.pendingDecision.evidence != "" %}<details class="more"><summary>Review details</summary><pre>{{ p.pendingDecision.evidence }}</pre></details>{% endif %}
+      </section>
+      {% else %}
+      <p class="empty">Nothing is waiting for you.</p>
+      {% endif %}
+    </section>
+  {% endunless %}{% endfor %}
+  <section class="sect">
+    <h2>History</h2>
+    {% assign any = false %}
+    {% for d in data.decisions %}{% if d.status == "resolved" %}{% assign any = true %}
+      <div class="orow" style="grid-template-columns:1fr auto"><div><h3>{{ d.choice | replace: "_", " " | capitalize }}</h3><p class="sub">Resolved by {{ d.resolvedBy }}</p></div><div class="side"><span class="chip good">Resolved</span></div></div>
+    {% endif %}{% endfor %}
+    {% unless any %}<p class="empty">No decisions have been made yet.</p>{% endunless %}
+  </section>
+</div>

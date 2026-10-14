@@ -1,0 +1,16 @@
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.prod.vars
+.prod.secrets.json
+.dev.human
+worker-configuration.d.ts
+.env
+.env.*
+!.env.example
+.DS_Store
+results/
+*.log
+.pnpm-store/

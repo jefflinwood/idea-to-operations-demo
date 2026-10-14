@@ -1,0 +1,1 @@
+ALTER TABLE Change ADD COLUMN title TEXT;

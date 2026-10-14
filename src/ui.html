@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Swarm</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #14181f; --muted: #5d6877; --line: #e1e5ea; --soft: #eef1f5;
+  --working: #1d6fe0; --working-bg: #e6f0fd;
+  --verifying: #6b46c1; --verifying-bg: #efe9fb;
+  --waiting: #b45309; --waiting-bg: #fdf0d9;
+  --revising: #c2410c; --revising-bg: #fde9de;
+  --done: #15803d; --done-bg: #e2f5e9;
+  --queued: #5d6877; --queued-bg: #eceff3;
+  --bad: #b91c1c; --bad-bg: #fde8e8;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116; --panel: #161b22; --ink: #e8ecf1; --muted: #98a3b3; --line: #262d38; --soft: #1d242e;
+    --working: #6aa8ff; --working-bg: #14284a;
+    --verifying: #b79cf2; --verifying-bg: #2a1f4a;
+    --waiting: #f5b454; --waiting-bg: #3b2a0f;
+    --revising: #f59a6b; --revising-bg: #3d2013;
+    --done: #5fd18a; --done-bg: #12301f;
+    --queued: #98a3b3; --queued-bg: #222a35;
+    --bad: #ff8585; --bad-bg: #3d1717;
+  }
+}
+* { box-sizing: border-box; }
+html { color-scheme: light dark; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: inherit; }
+header.top { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+header.top .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; text-decoration: none; }
+header.top .brand small { color: var(--muted); font-weight: 500; margin-left: 8px; }
+header.top .spacer { flex: 1; }
+header.top select { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); max-width: 260px; }
+.live { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+.live i { width: 9px; height: 9px; border-radius: 50%; background: var(--done); animation: pulse 2s infinite; }
+.live.off i { background: var(--bad); animation: none; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: .35; } 100% { opacity: 1; } }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 24px 80px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 4px; letter-spacing: -0.02em; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 32px 0 10px; font-weight: 700; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.b-working { color: var(--working); background: var(--working-bg); }
+.b-verifying { color: var(--verifying); background: var(--verifying-bg); }
+.b-waiting { color: var(--waiting); background: var(--waiting-bg); }
+.b-revising { color: var(--revising); background: var(--revising-bg); }
+.b-completed { color: var(--done); background: var(--done-bg); }
+.b-queued { color: var(--queued); background: var(--queued-bg); }
+.b-abandoned, .b-failed { color: var(--bad); background: var(--bad-bg); }
+.b-passed { color: var(--done); background: var(--done-bg); }
+.b-not_run { color: var(--queued); background: var(--queued-bg); }
+.pulse::before { animation: pulse 1.4s infinite; }
+
+/* Swarm */
+.summary { display: flex; flex-wrap: wrap; gap: 28px; align-items: baseline; margin: 6px 0 14px; }
+.summary .total { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.summary .total span { font-size: 18px; color: var(--muted); font-weight: 500; margin-left: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 18px; }
+.legend b { font-weight: 700; margin-right: 4px; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; vertical-align: baseline; }
+.bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--soft); margin-bottom: 8px; }
+.bar > i { display: block; transition: width .5s; }
+.banner { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: 14px; background: var(--waiting-bg); border: 1px solid var(--waiting); color: var(--ink); margin: 18px 0; text-decoration: none; }
+.banner strong { color: var(--waiting); font-size: 18px; }
+.banner .go { margin-left: auto; font-weight: 700; color: var(--waiting); white-space: nowrap; }
+table.rows { width: 100%; border-collapse: collapse; }
+table.rows th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 700; }
+table.rows td { padding: 14px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.rows tr:last-child td { border-bottom: 0; }
+table.rows tr.click { cursor: pointer; }
+table.rows tr.click:hover td { background: var(--soft); }
+.agent { font-weight: 700; white-space: nowrap; }
+.task { font-weight: 600; font-size: 17px; }
+.step { color: var(--muted); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { font: 12.5px var(--mono); padding: 2px 8px; border-radius: 6px; background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+.chip.held { color: var(--working); background: var(--working-bg); border-color: transparent; }
+.chip.denied { color: var(--bad); background: var(--bad-bg); border-color: transparent; }
+.sha { font-family: var(--mono); font-size: 13px; background: var(--soft); padding: 2px 7px; border-radius: 6px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } table.rows .hide-sm { display: none; } }
+.stat { display: flex; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.stat:last-child { border-bottom: 0; }
+.stat span { color: var(--muted); }
+.feed { list-style: none; margin: 0; padding: 0; }
+.feed li { display: flex; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.feed li:last-child { border-bottom: 0; }
+.feed time { color: var(--muted); font: 13px var(--mono); min-width: 74px; padding-top: 2px; white-space: nowrap; }
+.feed .who { font-weight: 700; }
+.feed .warn { color: var(--waiting); font-weight: 600; }
+.feed .bad { color: var(--bad); font-weight: 600; }
+.feed .good { color: var(--done); font-weight: 600; }
+
+/* Change */
+.crumbs { margin-bottom: 14px; }
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--ink); }
+.titlerow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.fact { padding: 14px 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.fact label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+.fact .v { font-size: 16px; word-break: break-all; }
+.fact .hint { color: var(--muted); font-size: 13px; }
+.checks .row { display: grid; grid-template-columns: 190px 120px 1fr; gap: 14px; align-items: start; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.checks .row:last-child { border-bottom: 0; }
+.checks .row.attempt { display: flex; gap: 14px; align-items: baseline; background: var(--soft); padding: 9px 18px; }
+.checks .row.attempt b { text-transform: uppercase; letter-spacing: .07em; font-size: 12px; }
+.checks .stage { font-weight: 700; }
+.checks .detail { color: var(--muted); font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+.checks .detail.err { color: var(--ink); font-family: var(--mono); font-size: 13px; background: var(--bad-bg); padding: 8px 10px; border-radius: 8px; }
+.timeline { position: relative; margin: 0; padding: 6px 0 6px 0; list-style: none; }
+.timeline li { display: grid; grid-template-columns: 70px 18px 1fr; gap: 8px; padding: 7px 18px; align-items: start; }
+.timeline .t { color: var(--muted); font: 13px var(--mono); padding-top: 2px; text-align: right; }
+.timeline .n { position: relative; height: 100%; }
+.timeline .n::before { content: ""; position: absolute; left: 6px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--line); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--muted); }
+.timeline .n.ok::before { background: var(--done); box-shadow: 0 0 0 1px var(--done); }
+.timeline .n.bad::before { background: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.timeline .n.wait::before { background: var(--waiting); box-shadow: 0 0 0 1px var(--waiting); }
+.timeline .n.hum::before { background: var(--verifying); box-shadow: 0 0 0 1px var(--verifying); }
+.timeline .d { color: var(--muted); font-size: 14px; }
+.timeline .warn { color: var(--waiting); font-weight: 600; }
+.chip.risk { color: var(--waiting); background: var(--waiting-bg, var(--soft)); border-color: transparent; }
+.cta { display: inline-block; margin-top: 8px; font-weight: 700; color: var(--waiting); text-decoration: none; }
+
+/* Decision */
+.hero { padding: 22px 26px; border-radius: 16px; background: var(--waiting-bg); border: 1px solid var(--waiting); margin-bottom: 8px; }
+.hero.resolved { background: var(--done-bg); border-color: var(--done); }
+.hero h1 { margin-bottom: 8px; }
+.hero p { margin: 0; font-size: 18px; }
+.flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
+@media (max-width: 860px) { .flow { grid-template-columns: 1fr; } .flow .arrow { transform: rotate(90deg); justify-self: center; } }
+.card { padding: 16px 18px; }
+.card h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.card .name { font-size: 18px; font-weight: 700; display: block; text-decoration: none; margin-bottom: 6px; }
+.card a.name:hover { text-decoration: underline; }
+.flow .arrow { align-self: center; text-align: center; color: var(--bad); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+.flow .arrow b { display: block; font-size: 30px; line-height: 1; }
+pre.evidence { margin: 0; padding: 16px 18px; font: 14px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; background: var(--bad-bg); color: var(--ink); border-radius: 14px; border: 1px solid var(--bad); }
+.why { padding: 16px 20px; font-size: 17px; }
+.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 860px) { .actions { grid-template-columns: 1fr; } }
+button.act { font: inherit; text-align: left; padding: 18px 20px; border-radius: 14px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; transition: border-color .15s, transform .05s; }
+button.act:hover:not(:disabled) { border-color: var(--working); }
+button.act:active:not(:disabled) { transform: translateY(1px); }
+button.act.primary { border-color: var(--working); }
+button.act.danger:hover:not(:disabled) { border-color: var(--bad); }
+button.act:disabled { opacity: .55; cursor: default; }
+button.act .l { display: block; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+button.act .d { display: block; color: var(--muted); font-size: 14px; }
+.err-msg { color: var(--bad); margin-top: 10px; font-weight: 600; }
+.stepper { display: flex; gap: 0; flex-wrap: wrap; }
+.stepper .s { flex: 1; min-width: 160px; padding: 14px 16px; border-right: 1px solid var(--line); color: var(--muted); }
+.stepper .s:last-child { border-right: 0; }
+.stepper .s b { display: block; color: var(--ink); }
+.stepper .s.done { color: var(--done); } .stepper .s.done b { color: var(--done); }
+.stepper .s.now { background: var(--working-bg); color: var(--working); } .stepper .s.now b { color: var(--working); }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#/">Agent Swarm<small>governed by Zebric</small></a>
+  <span class="spacer"></span>
+  <select id="repoSel" title="Run"></select>
+  <span class="live" id="live"><i></i><span>live</span></span>
+</header>
+<main id="app"><div class="empty">Loading…</div></main>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (sha) => (sha ? String(sha).slice(0, 7) : "");
+const ULID = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const ulidTime = (id) => { let t = 0; for (const ch of String(id).slice(0, 10)) t = t * 32 + ULID.indexOf(ch); return t; };
+const when = (o) => { const p = Date.parse(String(o.createdAt || "").replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(o.createdAt || "")) ? "" : "Z")); return Number.isFinite(p) ? p : ulidTime(o.id); };
+const ago = (ms, now) => { const s = Math.max(0, Math.round((now - ms) / 1000)); return s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m " + (s % 60) + "s" : Math.floor(s / 3600) + "h"; };
+const offset = (ms, t0) => { const s = Math.max(0, Math.round((ms - t0) / 1000)); return "+" + (s < 60 ? s + "s" : Math.floor(s / 60) + "m" + String(s % 60).padStart(2, "0")); };
+
+let state = null, lastKey = "", openDetails = new Set(), busy = false, failures = 0;
+let repoChoice = localStorage.getItem("repo") || "";
+
+/* ---------- derived views ---------- */
+function indexState(s) {
+  const changeByTask = {}; for (const c of s.changes) changeByTask[c.taskId] = c;
+  const taskById = {}; for (const t of s.tasks) taskById[t.id] = t;
+  const changeById = {}; for (const c of s.changes) changeById[c.id] = c;
+  const lastEvent = {}; for (const e of s.events) { if (e.changeId) lastEvent[e.changeId] = e; if (e.taskId) lastEvent["t:" + e.taskId] = e; }
+  const leasesByTask = {}; for (const l of s.leases) (leasesByTask[l.taskId] ||= []).push(l);
+  return { changeByTask, taskById, changeById, lastEvent, leasesByTask };
+}
+function view(t, c) {
+  if (t.status === "ready") return { key: "queued", label: "Queued", cls: "queued" };
+  if (!c) return { key: "working", label: "Starting", cls: "working" };
+  switch (c.status) {
+    case "working": return { key: "working", label: "Working", cls: "working", live: true };
+    case "submitted": return { key: "verifying", label: "Submitted", cls: "verifying", live: true };
+    case "integrating": return { key: "verifying", label: "Merging with main", cls: "verifying", live: true };
+    case "verifying": return { key: "verifying", label: "Type-checking", cls: "verifying", live: true };
+    case "ready": return { key: "verifying", label: "Landing on main", cls: "verifying", live: true };
+    case "needs_decision": return { key: "waiting", label: "Needs a human", cls: "waiting", live: true };
+    case "revision": return { key: "working", label: "Revising", cls: "revising", live: true };
+    case "integrated": return { key: "verifying", label: "Landing on main", cls: "verifying", live: true };
+    case "completed": return { key: "completed", label: "Completed", cls: "completed" };
+    case "abandoned": return { key: "abandoned", label: "Abandoned", cls: "abandoned" };
+  }
+  return { key: "working", label: c.status, cls: "working" };
+}
+const badge = (v) => '<span class="badge b-' + v.cls + (v.live ? " pulse" : "") + '">' + esc(v.label) + "</span>";
+
+const riskOf = (e) => { try { const r = JSON.parse(e.detail); return typeof r.conflict === "number" ? r : null; } catch { return null; } };
+// Clef's verdict on every pair is recorded, but only a likely conflict is worth showing.
+const quiet = (e) => e.kind === "lease.risk" && !((riskOf(e) || {}).conflict >= 0.5);
+
+function say(e, ix) {
+  const d = e.detail || "";
+  const k = e.kind;
+  const sym = (x) => '<span class="sha">' + esc(String(x).split("::").pop()) + "</span>";
+  switch (k) {
+    case "task.claimed": return "claimed the task";
+    case "change.started": return "forked its own workspace from main " + '<span class="sha">' + esc(short(String(d).replace("base ", ""))) + "</span>";
+    case "lease.acquired": return "declared intent on " + sym(d);
+    case "lease.denied": return '<span class="warn">lease denied</span> on ' + sym(String(d).split(" held")[0]) + " — waits, never edits anyway";
+    case "lease.risk": { let r = {}; try { r = JSON.parse(d); } catch {} return typeof r.conflict === "number" ? '<span class="' + (r.conflict >= 0.5 ? "warn" : "good") + '">Clef: ' + Math.round(r.conflict * 100) + "% chance of conflict</span> with " + esc(r.holderTitle || "another task") + (r.waited ? " — waited" : "") : ""; }
+    case "lease.released": return "released " + sym(d);
+    case "change.submitted": return "pushed and submitted <span class=\"sha\">" + esc(short(d)) + "</span>";
+    case "task.submitted": return "task submitted";
+    case "change.integrating": return "integration started against current main";
+    case "check.structural_merge.passed": return '<span class="good">structural merge passed</span>';
+    case "check.structural_merge.failed": return '<span class="bad">structural merge conflict</span>';
+    case "change.verifying": return "verifying the merged result";
+    case "check.typescript.passed": return '<span class="good">TypeScript passed</span>';
+    case "check.typescript.failed": return '<span class="bad">TypeScript failed</span>';
+    case "check.tests.not_run": return "tests not run (the demo app has none)";
+    case "change.ready": return "verified, ready to land";
+    case "change.integrated": return '<span class="good">landed on main</span> <span class="sha">' + esc(short(d)) + "</span>";
+    case "change.reintegrating": return '<span class="warn">main moved</span> while verifying — merging again';
+    case "integration.main_moved": return '<span class="warn">main moved</span> under this change — merging again';
+    case "decision.requested": return '<span class="warn">stopped: a human must decide</span>';
+    case "decision.resolved": return '<strong>human chose: ' + esc(String(d).replace(/_/g, " ")) + "</strong>";
+    case "task.completed": return "task completed";
+    case "change.completed": return "change completed";
+  }
+  return esc(k) + (d ? " " + esc(String(d).slice(0, 80)) : "");
+}
+const dotClass = (k) => /failed|denied/.test(k) ? "bad" : k === "lease.risk" ? "wait" : /decision\.requested/.test(k) ? "wait" : /decision\.resolved/.test(k) ? "hum" : /integrated|completed|passed/.test(k) ? "ok" : "";
+
+/* ---------- screen A: swarm ---------- */
+function swarm(s, ix) {
+  const rows = s.tasks.map((t) => ({ t, c: ix.changeByTask[t.id], v: view(t, ix.changeByTask[t.id]) }));
+  const counts = { working: 0, verifying: 0, waiting: 0, completed: 0, queued: 0, abandoned: 0 };
+  for (const r of rows) counts[r.v.key]++;
+  const colors = { working: "var(--working)", verifying: "var(--verifying)", waiting: "var(--waiting)", completed: "var(--done)", queued: "var(--queued)", abandoned: "var(--bad)" };
+  const names = { working: "working", verifying: "verifying", waiting: "waiting for a human", completed: "completed", queued: "queued", abandoned: "abandoned" };
+  const total = rows.length || 1;
+  const pending = s.decisions.find((d) => d.status === "pending");
+  const pendChange = pending && ix.changeById[pending.changeId];
+  const pendTask = pendChange && ix.taskById[pendChange.taskId];
+
+  // One row per agent: the task it is on now (or its last one), with a count of what it already finished.
+  const byAgent = {};
+  for (const r of rows.filter((r) => r.t.claimedBy)) (byAgent[r.t.claimedBy] ||= []).push(r);
+  const agentNum = (a) => Number(String(a).replace(/\D/g, ""));
+  const claimed = Object.keys(byAgent).sort((x, y) => agentNum(x) - agentNum(y)).map((a) => {
+    const mine = byAgent[a].sort((p, q) => (p.t.id < q.t.id ? -1 : 1));
+    const active = [...mine].reverse().find((r) => !["completed", "abandoned"].includes(r.v.key));
+    const cur = active || mine[mine.length - 1];
+    return { ...cur, doneCount: mine.filter((r) => r !== cur && r.v.key === "completed").length };
+  });
+  const queued = rows.filter((r) => !r.t.claimedBy);
+
+  const agentRows = claimed.map((r) => {
+    const le = r.c ? ix.lastEvent[r.c.id] : ix.lastEvent["t:" + r.t.id];
+    const leases = (ix.leasesByTask[r.t.id] || []).map((l) => '<span class="chip ' + (l.status === "active" ? "held" : "") + '">' + esc(String(l.symbol).split("::").pop()) + "</span>").join("");
+    const denied = s.events.filter((e) => e.kind === "lease.denied" && e.taskId === r.t.id).length;
+    const risks = s.events.filter((e) => e.kind === "lease.risk" && e.taskId === r.t.id && !quiet(e)).map(riskOf).map((k) => '<span class="chip risk">Clef: ' + Math.round(k.conflict * 100) + "% conflict · " + esc(k.holderTitle) + (k.waited ? " · waited" : "") + "</span>").join("");
+    return '<tr class="' + (r.c ? "click" : "") + '" ' + (r.c ? 'data-go="#/change/' + r.c.id + '"' : "") + ">" +
+      '<td class="agent">' + esc(String(r.t.claimedBy).replace("agent-", "Agent ")) + (r.doneCount ? '<div class="step">' + r.doneCount + " done</div>" : "") + "</td>" +
+      '<td><div class="task">' + esc(r.t.title) + "</div>" + (leases || denied || risks ? '<div class="chips">' + leases + risks + (denied ? '<span class="chip denied">' + denied + " lease denied</span>" : "") + "</div>" : "") + "</td>" +
+      "<td>" + badge(r.v) + "</td>" +
+      '<td class="step hide-sm">' + (le ? say(le, ix) + " · " + ago(when(le), s.now) + " ago" : "") + "</td></tr>";
+  }).join("");
+
+  const landed = s.events.filter((e) => e.kind === "change.integrated");
+  const moved = s.events.filter((e) => e.kind === "integration.main_moved").length;
+  const denials = s.events.filter((e) => e.kind === "lease.denied").length;
+  const recent = s.events.filter((e) => !quiet(e) && !/^(task\.(submitted|completed)|change\.(completed|ready|verifying|integrating|started)|lease\.released|check\.tests)/.test(e.kind)).slice(-14).reverse();
+
+  return '<h1>' + rows.length + ' tasks</h1><p class="sub">Autonomous agents change one codebase at the same time. Zebric decides who may do what, and what may land.</p>' +
+    '<div class="summary"><div class="legend">' + Object.keys(counts).filter((k) => counts[k] || ["working", "verifying", "waiting", "completed"].includes(k)).map((k) => '<span><i class="dot" style="background:' + colors[k] + '"></i><b>' + counts[k] + "</b>" + names[k] + "</span>").join("") + "</div></div>" +
+    '<div class="bar">' + Object.keys(counts).map((k) => '<i style="width:' + (counts[k] / total * 100) + "%;background:" + colors[k] + '"></i>').join("") + "</div>" +
+    (pending && pendChange ? '<a class="banner" href="#/decision/' + pending.id + '"><strong>Paused for a human</strong><span>' + esc(pendTask ? pendTask.title : "A change") + " passed Git and the structural merge, but fails verification.</span><span class=\"go\">Review &rarr;</span></a>" : "") +
+    '<h2>Agents</h2><div class="panel"><table class="rows"><thead><tr><th>Agent</th><th>Task</th><th>State</th><th class="hide-sm">Latest</th></tr></thead><tbody>' +
+    (agentRows || '<tr><td colspan="4" class="step">No agent has claimed a task yet.</td></tr>') + "</tbody></table></div>" +
+    (queued.length ? '<h2>Queued (' + queued.length + ')</h2><div class="panel"><table class="rows"><tbody>' + queued.map((r) => '<tr><td class="task">' + esc(r.t.title) + '</td><td style="text-align:right">' + badge(r.v) + "</td></tr>").join("") + "</tbody></table></div>" : "") +
+    '<div class="grid2"><div><h2>Main</h2><div class="panel">' +
+    '<div class="stat"><span>Current main</span><b class="sha">' + esc(short(s.repo.mainSha) || "—") + "</b></div>" +
+    '<div class="stat"><span>Changes landed</span><b>' + landed.length + "</b></div>" +
+    '<div class="stat"><span>Main moved under a change (merged again)</span><b>' + moved + "</b></div>" +
+    '<div class="stat"><span>Lease denials (agent waited)</span><b>' + denials + "</b></div>" +
+    '</div></div><div><h2>Activity</h2><div class="panel"><ul class="feed">' +
+    (recent.map((e) => { const c = ix.changeById[e.changeId]; const t = c ? ix.taskById[c.taskId] : ix.taskById[e.taskId]; return "<li><time>" + ago(when(e), s.now) + '</time><span><span class="who">' + esc(t ? String(t.claimedBy || "").replace("agent-", "Agent ") : "") + "</span> " + say(e, ix) + (t ? ' <span class="step">· ' + esc(t.title) + "</span>" : "") + "</span></li>"; }).join("") || '<li><span class="step">Nothing yet.</span></li>') +
+    "</ul></div></div></div>";
+}
+
+/* ---------- screen B: change ---------- */
+function changeScreen(s, ix, id) {
+  const c = ix.changeById[id]; if (!c) return '<div class="empty">Change not found in this run.</div>';
+  const t = ix.taskById[c.taskId]; const v = view(t, c);
+  const checks = s.checks.filter((k) => k.changeId === c.id);
+  const events = s.events.filter((e) => e.changeId === c.id || e.taskId === c.taskId);
+  const t0 = events.length ? when(events[0]) : when(c);
+  const decisions = s.decisions.filter((d) => d.changeId === c.id);
+  const symbols = (String(t.description).match(/Symbols:\s*(.+)/) || [, ""])[1].split(",").map((x) => x.trim()).filter(Boolean);
+  const leases = ix.leasesByTask[t.id] || [];
+  const mergedOnto = ((checks.find((k) => k.stage === "structural_merge") || {}).detail || "").match(/onto main (\w+) \(base (\w+)/);
+  const stageName = { structural_merge: "Structural merge", typescript: "TypeScript", tests: "Tests", deploy: "Deploy" };
+  const stageWhy = { structural_merge: "Mergiraf combines this change with current main, by syntax tree", typescript: "tsc --strict on the merged result", tests: "", deploy: "" };
+
+  return '<div class="crumbs"><a href="#/">&larr; Swarm</a></div>' +
+    '<div class="titlerow"><h1>' + esc(t.title) + "</h1>" + badge(v) + "</div>" +
+    '<p class="sub">' + esc(String(t.description).replace(/\nSymbols:.*|\nRequires:.*/g, "")) + "</p>" +
+    (decisions.find((d) => d.status === "pending") ? '<a class="cta" href="#/decision/' + decisions.find((d) => d.status === "pending").id + '">This change is waiting for a human decision &rarr;</a>' : "") +
+    '<h2>Git</h2><div class="panel facts">' +
+    '<div class="fact"><label>Agent</label><div class="v">' + esc(String(c.actorId).replace("agent-", "Agent ")) + "</div></div>" +
+    '<div class="fact"><label>Repository</label><div class="v">' + esc(s.repo.artifactsRepo) + '</div><div class="hint">its own fork: chg-' + esc(c.id.toLowerCase().slice(0, 8)) + "…</div></div>" +
+    '<div class="fact"><label>Base SHA</label><div class="v sha">' + esc(short(c.baseSha) || "—") + '</div><div class="hint">main when the agent started</div></div>' +
+    '<div class="fact"><label>Head SHA</label><div class="v sha">' + esc(short(c.headSha) || "—") + '</div><div class="hint">what the agent pushed</div></div>' +
+    (mergedOnto ? '<div class="fact"><label>Merged onto</label><div class="v sha">' + esc(mergedOnto[1]) + '</div><div class="hint">main at integration time' + (mergedOnto[1] !== mergedOnto[2] ? " (it had moved)" : "") + "</div></div>" : "") +
+    (c.integratedSha ? '<div class="fact"><label>Landed as</label><div class="v sha">' + esc(short(c.integratedSha)) + '</div><div class="hint">commit on main</div></div>' : "") +
+    "</div>" +
+    '<h2>Symbols this change declared</h2><div class="panel" style="padding:14px 18px"><div class="chips" style="margin:0">' +
+    (symbols.map((sy) => { const l = leases.find((x) => x.symbol === sy); const den = s.events.some((e) => e.kind === "lease.denied" && e.taskId === t.id && String(e.detail).startsWith(sy)); return '<span class="chip ' + (l && l.status === "active" ? "held" : "") + '">' + esc(sy) + (l ? (l.status === "active" ? " · leased" : " · released") : "") + (den ? " · was denied, waited" : "") + "</span>"; }).join("") || '<span class="step">none declared</span>') +
+    '</div><p class="step" style="margin:10px 0 0">A lease coordinates declared intent. It does not guarantee the change is correct — the checks below do.</p></div>' +
+    '<h2>Checks</h2><div class="panel checks">' +
+    ((() => { let attempt = 0; return checks.map((k) => { const head = k.stage === "structural_merge" ? '<div class="row attempt"><b>Attempt ' + (++attempt) + "</b><span class=\"step\">" + (attempt === 1 ? "merged against current main" : "after the human's decision: the agent revised, then everything ran again") + "</span></div>" : ""; return head + '<div class="row"><div><div class="stage">' + esc(stageName[k.stage] || k.stage) + '</div><div class="step">' + esc(stageWhy[k.stage] || "") + '</div></div><div><span class="badge b-' + (k.outcome === "failed" ? "failed" : k.outcome) + '">' + esc(k.outcome.replace("_", " ")) + '</span></div><div class="detail ' + (k.outcome === "failed" ? "err" : "") + '">' + esc(String(k.detail || "").replace(/\.\.\/tmp\/[\w-]+\//g, "")) + "</div></div>"; }).join(""); })() || '<div class="row"><div class="step" style="grid-column:1/-1">No checks yet — the change has not been submitted for integration.</div></div>') +
+    '</div><h2>Timeline</h2><div class="panel"><ul class="timeline">' +
+    events.filter((e) => !quiet(e)).map((e) => '<li><span class="t">' + offset(when(e), t0) + '</span><span class="n ' + dotClass(e.kind) + '"></span><span>' + say(e, ix) + "</span></li>").join("") + "</ul></div>";
+}
+
+/* ---------- screen C: decision ---------- */
+function decisionScreen(s, ix, id) {
+  const d = s.decisions.find((x) => x.id === id); if (!d) return '<div class="empty">Decision not found in this run.</div>';
+  const c = ix.changeById[d.changeId], t = c && ix.taskById[c.taskId];
+  const q = String(d.question || "");
+  const reason = (q.match(/Reason:\n([\s\S]*?)\n\nEvidence/) || [, q])[1];
+  const stage = (q.match(/Evidence \((\w+)\)/) || [, "typescript"])[1];
+  const evidence = (q.match(/Evidence \(\w+\):\n([\s\S]*?)\n\nChange:/) || [, ""])[1].replace(/\.\.\/tmp\/[\w-]+\//g, "");
+  const landedRefs = [...reason.matchAll(/"([^"]+)" \(change (\w{26}), commit (\w+)\)/g)].map((m) => ({ title: m[1], id: m[2], sha: m[3] }));
+  let opts = d.options; if (typeof opts === "string") { try { opts = JSON.parse(opts); } catch { opts = []; } } opts = Array.isArray(opts) ? opts : [];
+  const resolved = d.status === "resolved";
+  const events = s.events.filter((e) => e.changeId === c.id);
+  const resolvedAt = events.find((e) => e.kind === "decision.resolved");
+  const after = resolvedAt ? events.filter((e) => e.id > resolvedAt.id) : [];
+  const done = c.status === "completed", abandoned = c.status === "abandoned";
+  const steps = [
+    { n: "Human decided", d: resolved ? String(d.choice).replace(/_/g, " ") : "waiting…", st: resolved ? "done" : "now" },
+    { n: d.choice === "abandon" ? "Change dropped" : "Agent revises", d: "against current main", st: !resolved ? "" : abandoned || done || c.status !== "revision" ? "done" : "now" },
+    { n: "Re-verified", d: "merge + TypeScript again", st: !resolved || c.status === "revision" ? "" : done || abandoned ? "done" : "now" },
+    { n: d.choice === "abandon" ? "Nothing lands" : "Lands on main", d: done ? "integrated" : "", st: done ? "done" : "" },
+  ];
+  const whyStopped = stage === "typescript"
+    ? "Git merged the two versions without a conflict, and so did the structural merge. But the combined code does not type-check. No merge tool can tell which change should give way — that is a judgment call, so Zebric stopped the workflow and asked."
+    : "The structural merge could not combine the two versions. Zebric will not guess which side to keep, so it stopped the workflow and asked.";
+
+  return '<div class="crumbs"><a href="#/">&larr; Swarm</a>' + (c ? ' &nbsp;/&nbsp; <a href="#/change/' + c.id + '">' + esc(t ? t.title : "change") + "</a>" : "") + "</div>" +
+    '<div class="hero ' + (resolved ? "resolved" : "") + '"><h1>' + (resolved ? "Decision recorded" : "A human needs to decide") + "</h1><p>" +
+    (resolved ? (done ? "The workflow resumed and the change landed on main." : abandoned ? "The change was abandoned." : "The durable workflow has resumed.") : esc(t ? t.title : "A change") + " cannot land on its own.") + "</p></div>" +
+    '<h2>What interacted</h2><div class="flow"><div class="panel card"><h3>Landed on main meanwhile</h3>' +
+    (landedRefs.map((r) => (ix.changeById[r.id] ? '<a class="name" href="#/change/' + r.id + '">' : '<span class="name">') + esc(r.title) + (ix.changeById[r.id] ? "</a>" : "</span>") + '<span class="sha">' + esc(r.sha) + "</span>").join("") || '<span class="step">no other change landed</span>') +
+    '</div><div class="arrow"><b>&rarr;</b>changed what<br>this one uses</div><div class="panel card"><h3>This change' + (resolved ? '' : ' (waiting)') + '</h3><a class="name" href="#/change/' + c.id + '">' + esc(t ? t.title : "") + '</a><span class="step">' + esc(String(c.actorId).replace("agent-", "Agent ")) + " · head " + esc(short(c.headSha)) + "</span></div></div>" +
+    '<h2>Why it stopped</h2><div class="panel why">' + esc(whyStopped) + "</div>" +
+    '<h2>Evidence (' + esc(stage === "typescript" ? "TypeScript" : "structural merge") + ')</h2><pre class="evidence">' + esc(evidence || reason) + "</pre>" +
+    (resolved
+      ? '<h2>What happens next</h2><div class="panel stepper">' + steps.map((x) => '<div class="s ' + x.st + '"><b>' + (x.st === "done" ? "&#10003; " : "") + esc(x.n) + "</b>" + esc(x.d) + "</div>").join("") + "</div>"
+      : '<h2>Choose</h2><div class="actions">' + opts.map((o, i) => '<button class="act ' + (o.id === "return_for_revision" ? "primary " : "") + (o.id === "abandon" ? "danger" : "") + '" data-choose="' + esc(o.id) + '" data-change="' + c.id + '" data-decision="' + d.id + '"' + (busy ? " disabled" : "") + '><span class="l">' + esc(o.label) + '</span><span class="d">' + esc(o.description || "") + "</span></button>").join("") + '</div><div id="errMsg" class="err-msg"></div>') +
+    "";
+}
+
+/* ---------- shell ---------- */
+function render() {
+  const s = state; if (!s) return;
+  const sel = $("#repoSel");
+  const optsHtml = '<option value="">Latest run</option>' + (s.repos || []).slice().reverse().map((r) => '<option value="' + r.id + '"' + (repoChoice === r.id ? " selected" : "") + ">" + esc(r.artifactsRepo || r.id) + "</option>").join("");
+  if (sel.dataset.h !== optsHtml) { sel.innerHTML = optsHtml; sel.dataset.h = optsHtml; }
+  const route = location.hash.replace(/^#/, "") || "/";
+  let html;
+  if (!s.repo) html = '<div class="empty">No runs yet. Seed some tasks to see the swarm.</div>';
+  else {
+    const ix = indexState(s);
+    const m = route.match(/^\/(change|decision)\/(\w+)/);
+    html = !m ? swarm(s, ix) : m[1] === "change" ? changeScreen(s, ix, m[2]) : decisionScreen(s, ix, m[2]);
+  }
+  const app = $("#app");
+  if (app.dataset.h !== html) {
+    const y = window.scrollY; app.innerHTML = html; app.dataset.h = html; window.scrollTo(0, y);
+    app.querySelectorAll("details").forEach((el) => { if (openDetails.has(el.dataset.k)) el.open = true; });
+  }
+}
+async function poll() {
+  try {
+    const r = await fetch("/ui/api/state" + (repoChoice ? "?repo=" + encodeURIComponent(repoChoice) : ""), { credentials: "same-origin" });
+    if (r.status === 401) { $("#app").innerHTML = '<div class="empty">Signed out. Open <code>/ui?key=…</code> to sign in.</div>'; return; }
+    state = await r.json(); failures = 0; $("#live").classList.remove("off"); render();
+  } catch { if (++failures > 2) $("#live").classList.add("off"); }
+}
+document.addEventListener("click", async (e) => {
+  const row = e.target.closest("[data-go]"); if (row && !e.target.closest("a")) { location.hash = row.dataset.go; return; }
+  const btn = e.target.closest("[data-choose]"); if (!btn || busy) return;
+  busy = true; document.querySelectorAll("[data-choose]").forEach((b) => (b.disabled = true));
+  const res = await fetch("/ui/api/decide", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-ui": "1" }, body: JSON.stringify({ changeId: btn.dataset.change, decisionId: btn.dataset.decision, choice: btn.dataset.choose }) });
+  busy = false;
+  if (!res.ok) { const j = await res.json().catch(() => ({})); document.querySelectorAll("[data-choose]").forEach((b) => (b.disabled = false)); const el = $("#errMsg"); if (el) el.textContent = "Zebric refused: " + ((j.error && (j.error.message || j.error.code)) || res.status); return; }
+  await poll();
+});
+$("#repoSel").addEventListener("change", (e) => { repoChoice = e.target.value; localStorage.setItem("repo", repoChoice); $("#app").dataset.h = ""; poll(); });
+window.addEventListener("hashchange", () => { $("#app").dataset.h = ""; render(); window.scrollTo(0, 0); });
+poll(); setInterval(poll, 2000);
+</script>
+</body>
+</html>

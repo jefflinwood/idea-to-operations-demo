@@ -1,0 +1,55 @@
+<div class="wrap">
+  <header>
+    <h1>Artifacts</h1>
+    <p class="lede">Agent-isolated Artifacts workspaces</p>
+  </header>
+  {% for o in data.outcomes %}{% unless o.seeded %}
+    {% assign p = o | project: data %}
+    <section class="sect">
+      <div class="spread"><h2>{{ p.title }}</h2><a class="link" href="/outcomes/{{ o.id }}">Back to outcome &rarr;</a></div>
+      {% if p.changes.size == 0 %}<p class="empty">No changes yet. They appear here as agents submit work.</p>{% endif %}
+      {% for c in p.changes %}
+      <article class="chg">
+        <div class="hd">
+          <div><div class="no">Change {{ c.number }} &middot; {{ c.title }}</div><div class="by">Created by {{ c.agent }}</div></div>
+          <span class="chip {{ c.tone }}">{{ c.statusLabel }}</span>
+        </div>
+        <dl class="kv">
+          <div><dt>Artifact workspace</dt><dd class="mono">{{ c.workspace }}</dd></div>
+          <div><dt>Based on</dt><dd class="mono">main{% if c.baseSha != "" %} @ {{ c.baseSha }}{% endif %}</dd></div>
+          {% if c.landedSha != "" %}<div><dt>Landed as</dt><dd class="mono">main @ {{ c.landedSha }}</dd></div>{% endif %}
+        </dl>
+        {% if c.checks.size > 0 %}
+        <div class="ck">
+          {% for k in c.checks %}<span class="{% if k.outcome == 'passed' %}p{% elsif k.outcome == 'failed' %}f{% else %}n{% endif %}">{% if k.outcome == "passed" %}&#10003;{% elsif k.outcome == "failed" %}&#10007;{% else %}&ndash;{% endif %} {{ k.label }}{% if k.outcome == "not_run" %} (not run){% endif %}</span>{% endfor %}
+        </div>
+        {% endif %}
+        {% if c.trace.size > 0 %}
+        <div class="trace">
+          <h3>Agent provenance <span>what each agent was told, inherited and produced</span></h3>
+          {% for r in c.trace %}
+          <details class="run"{% if r.kind == "revise" %} open{% endif %}>
+            <summary><b>Run {{ r.number }} &middot; {{ r.kindLabel }}</b> by {{ r.agent }}{% if r.parent != "" %} <span class="from">continues {{ r.parent }}</span>{% endif %} &middot; {{ r.seconds }} s &middot; <span class="mono">{{ r.headSha }}</span>{% if r.rejected > 0 %} &middot; {{ r.rejected }} reply rejected{% endif %}</summary>
+            <dl class="kv">
+              <div><dt>Model</dt><dd class="mono">{{ r.model }}</dd></div>
+              <div><dt>Prompt hash</dt><dd class="mono">{{ r.promptHash }}</dd></div>
+              <div><dt>Wrote</dt><dd class="mono">{{ r.files | join: ", " }}</dd></div>
+            </dl>
+            {% if r.decision %}<p class="ctx"><b>Steered by:</b> your decision, &ldquo;{{ r.decision.choice }}&rdquo;{% if r.failedCheck != "" %}, after {{ r.failedCheck }} failed on the latest main{% endif %}.</p>{% endif %}
+            {% for a in r.advice %}<p class="ctx"><b>Clef:</b> {{ a }}</p>{% endfor %}
+            <p class="ctx"><b>Inherited context:</b></p>
+            <ul class="ctxl">{% for i in r.inherited %}<li>{{ i.source }}: {{ i.count }} files <span class="mono">{{ i.files }}</span></li>{% endfor %}</ul>
+            <p class="ctx"><b>Instruction</b></p>
+            <pre class="txt">{{ r.instruction }}</pre>
+            <p class="ctx"><b>Attempts:</b> {% for a in r.attempts %}<span class="{% if a.outcome == 'accepted' %}p{% else %}f{% endif %}">#{{ a.n }} {{ a.outcome }}{% if a.reason != "" %} ({{ a.reason }}){% endif %} &middot; {{ a.seconds }} s</span>{% unless forloop.last %} &rarr; {% endunless %}{% endfor %}</p>
+            {% if r.summary != "" %}<p class="ctx"><b>Agent's summary:</b> {{ r.summary }}</p>{% endif %}
+          </details>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if c.mainMoved %}<div class="note">Main changed while this change was in flight, so it was merged and verified again against the latest main{% if c.reintegrations > 1 %} ({{ c.reintegrations }} times){% endif %}.</div>{% endif %}
+      </article>
+      {% endfor %}
+    </section>
+  {% endunless %}{% endfor %}
+</div>

@@ -1,0 +1,55 @@
+<div class="wrap">
+  <header>
+    <h1>Project Portfolio</h1>
+    <p class="lede">Capabilities overview</p>
+  </header>
+
+  <section class="sect">
+    <h2>Active</h2>
+    {% assign shown = 0 %}
+    {% for o in data.outcomes %}{% unless o.seeded %}{% assign shown = shown | plus: 1 %}
+      {% assign p = o | project: data %}
+      <a class="orow live" href="/outcomes/{{ o.id }}">
+        <div>
+          <h3>{{ p.title }}</h3>
+          <p class="sub">{{ p.statement }}</p>
+          {% if p.status == "building" %}
+            <div class="facts">
+              <span><b>{{ p.progress }}%</b> complete</span>
+              <span><b>{{ p.activeAgents }}</b> agent{% if p.activeAgents != 1 %}s{% endif %} active</span>
+              {% if p.counts.decisions > 0 %}<span class="warn">{{ p.counts.decisions }} decision waiting</span>{% endif %}
+            </div>
+            <div class="progress bar"><i style="width:{{ p.progress }}%"></i></div>
+          {% elsif p.status == "shaping" %}
+            <div class="facts"><span><b>{{ p.readiness }}%</b> ready to build</span><span>Spec drafted, waiting for your go</span></div>
+          {% elsif p.status == "ready_for_launch" %}
+            <div class="facts"><span><b>Built in {{ p.summary.elapsed }}</b></span><span>{{ p.summary.changes }} changes landed</span></div>
+          {% else %}
+            <div class="facts"><span>{% if p.healthNote != "" %}{{ p.healthNote }}{% else %}Running{% endif %}</span></div>
+          {% endif %}
+        </div>
+        <div class="side">
+          <span class="chip {{ p.status }}">{% if p.status == "building" %}<i class="dot pulse"></i>{% endif %}{{ p.statusLabel }}</span>
+          <span class="chip lvl">{{ p.levelLabel }}</span>
+        </div>
+      </a>
+    {% endunless %}{% endfor %}
+    {% if shown == 0 %}<p class="empty">No active outcomes.</p>{% endif %}
+  </section>
+
+  <section class="sect">
+    <h2>Projects</h2>
+    <p class="sect-note">Completed or inactive</p>
+    {% for o in data.outcomes %}{% if o.seeded %}
+      {% assign p = o | project: data %}
+      <a class="orow" href="/outcomes/{{ o.id }}">
+        <div>
+          <h3>{{ p.title }}</h3>
+          <p class="sub">{{ p.statement }}</p>
+          <div class="facts"><span>{{ p.healthNote }}</span>{% if p.status == "shaping" %}<span>{{ p.readiness }}% ready to build</span>{% endif %}</div>
+        </div>
+        <div class="side"><span class="chip {{ p.status }}">{{ p.statusLabel }}</span><span class="chip lvl">{{ p.levelLabel }}</span></div>
+      </a>
+    {% endif %}{% endfor %}
+  </section>
+</div>

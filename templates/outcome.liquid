@@ -1,0 +1,197 @@
+{% assign o = data.outcome[0] %}
+{% assign p = o | project: data %}
+<div class="wrap">
+  <header class="head spread">
+    <div>
+      <h1>{{ p.title }}</h1>
+      <p class="lede">{{ p.statement }}</p>
+    </div>
+    <div>
+      {% if p.status == "shaping" and p.live %}
+        <div><!--action:StartBuildAction|Outcome|{{ o.id }}|/outcomes/{{ o.id }}|Start build|btn primary big|--><div class="muted" style="font-size:13px;margin-top:8px;text-align:right">{{ p.counts.queued }} implementation task{% if p.counts.queued != 1 %}s{% endif %} ready</div></div>
+      {% elsif p.status == "ready_for_launch" %}
+        <!--action:LaunchAction|Outcome|{{ o.id }}|/outcomes/{{ o.id }}|Launch|btn primary big|-->
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="metaline">
+    <span class="chip {{ p.status }}">{% if p.status == "building" %}<i class="dot pulse"></i>{% endif %}{{ p.statusLabel }}</span>
+    <span class="chip lvl">{{ p.levelLabel }}</span>
+    {% if p.owner %}<span>Owner <b>{{ p.owner }}</b></span>{% endif %}
+    {% if p.status == "building" %}
+      <span>Elapsed <b data-since="{{ p.buildStartedAt }}">{{ p.summary.elapsed }}</b></span>
+      <span><b>{{ p.progress }}%</b> complete</span>
+    {% endif %}
+  </div>
+
+  <div class="life">
+    {% for s in p.stages %}<div class="{{ s.state }} {{ s.key }}">{{ s.label }}</div>{% endfor %}
+  </div>
+
+  {% if p.status == "shaping" %}
+  <!-- ============================ SHAPE ============================ -->
+  <div class="cols">
+    <div>
+      <div class="block"><h2>Problem</h2><p>{{ o.problem }}</p></div>
+      <div class="block"><h2>Proposed experience</h2><p>{{ o.experience }}</p></div>
+      <div class="block"><h2>Acceptance criteria</h2><ul class="list">{% for c in o.criteria %}<li>{{ c }}</li>{% endfor %}</ul></div>
+      {% if o.idea %}<div class="block"><h2>Original idea</h2><p class="muted">&ldquo;{{ o.idea }}&rdquo;</p></div>{% endif %}
+    </div>
+    <aside>
+      <div class="ready-ring">
+        <div class="ring">
+          <svg width="96" height="96" viewBox="0 0 96 96"><circle cx="48" cy="48" r="42" fill="none" stroke="var(--ring)" stroke-width="7"/><circle cx="48" cy="48" r="42" fill="none" stroke="var(--ring-on)" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ p.readiness | times: 2.639 }} 264"/></svg>
+          <b>{{ p.readiness }}%</b>
+        </div>
+        <div><h3>Build readiness</h3><span class="muted">{% if p.readiness >= 80 %}Ready to start. Remaining questions are listed below.{% else %}Clarify the scope and acceptance criteria before starting the build.{% endif %}</span></div>
+      </div>
+      {% if o.assumptions %}<div class="block"><h2>Assumptions</h2><ul class="list">{% for a in o.assumptions %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if o.questions %}<div class="block"><h2>Open questions</h2><ul class="list q">{% for q in o.questions %}<li>{{ q }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if o.evidence %}<div class="block"><h2>Evidence and context</h2><ul class="list">{% for e in o.evidence %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+    </aside>
+  </div>
+  {% if p.live %}
+  <div class="commit">
+    <p>Starting the build authorizes agents to implement this scope. Review the acceptance criteria and open questions first. Decisions that need your input will appear here.</p>
+    <div><!--action:StartBuildAction|Outcome|{{ o.id }}|/outcomes/{{ o.id }}|Build Outcome|btn primary big|--><div class="muted" style="font-size:13px;margin-top:8px;text-align:right">{{ p.counts.queued }} implementation task{% if p.counts.queued != 1 %}s{% endif %} ready</div></div>
+  </div>
+  {% else %}
+  <div class="commit"><p class="muted">TThis example shows another initiative in the portfolio. Building is available only for the featured demo.</p></div>
+  {% endif %}
+
+  {% elsif p.status == "building" %}
+  <!-- ============================ BUILD ============================ -->
+  <div class="cols">
+    <div>
+      {% if p.pendingDecision %}
+      <section class="decide">
+        <h2>Decision needed{% if p.pendingDecision.count > 1 %} <span class="more-waiting">{{ p.pendingDecision.count | minus: 1 }} more decisions pending</span>{% endif %}</h2>
+        <p class="q">{{ p.pendingDecision.headline }}</p>
+        <p class="why">{{ p.pendingDecision.reason }}</p>
+        <div class="opts">
+          {% for opt in p.pendingDecision.options %}
+          <div class="opt{% if opt.recommended %} rec{% endif %}">
+            <div><div class="t">{% if opt.recommended %}<span class="rec-tag">Recommended</span>{% endif %}{{ opt.label }}</div><div class="d">{{ opt.description }}</div></div>
+            <!--action:ResolveDecisionAction|Decision|{{ p.pendingDecision.id }}|/outcomes/{{ o.id }}|{{ opt.label }}|btn{% if opt.recommended %} primary{% endif %}|{"choice":"{{ opt.id }}"}-->
+          </div>
+          {% endfor %}
+        </div>
+        {% if p.pendingDecision.evidence != "" %}<details class="more"><summary>Review details</summary><pre>{{ p.pendingDecision.evidence }}</pre></details>{% endif %}
+      </section>
+      {% endif %}
+
+      <div class="stats block">
+        <div class="stat"><b>{{ p.counts.completed }}</b><span>completed</span></div>
+        <div class="stat"><b>{{ p.counts.inFlight }}</b><span>in progress</span></div>
+        <div class="stat"><b>{{ p.counts.queued }}</b><span>queued</span></div>
+        <div class="stat{% if p.counts.decisions > 0 %} hl{% endif %}"><b>{{ p.counts.decisions }}</b><span>decision{% if p.counts.decisions != 1 %}s{% endif %} pending</span></div>
+      </div>
+
+      <div class="block">
+        <h2>Live activity</h2>
+        {% if p.activity.size == 0 %}<p class="empty">Waiting for an agent to start the first task.</p>{% endif %}
+        <ul class="feed">
+          {% for a in p.activity limit: 14 %}
+          <li class="{{ a.tone }}"><i class="m"></i><span class="tx">{{ a.text }}</span><span class="tm">{{ a.at | formatDate: "time" }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <aside>
+      <div class="block">
+        <h2>Agents</h2>
+        {% for a in p.agents %}
+        <div class="agent">
+          <div class="n">{{ a.name }}{% if a.since %}<span data-since-ms="{{ a.since }}">{{ a.elapsed }}</span>{% endif %}</div>
+          <div class="t">{{ a.task }}</div>
+          <div class="s {{ a.state }}">{% if a.state == "waiting" %}Awaiting your decision{% else %}<i class="dot pulse"></i>{{ a.stateLabel }}{% endif %}</div>
+          {% if a.latest != "" %}<div class="s">{{ a.latest }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        {% if p.agents.size == 0 %}<p class="empty">No agents are active right now.</p>{% endif %}
+        <div style="margin-top:14px"><a class="link" href="/runs/{{ o.id }}">{{ p.activeAgents }} agent{% if p.activeAgents != 1 %}s{% endif %} active · View agent runs &rarr;</a></div>
+      </div>
+      {% if p.liveUrl != "" %}<div class="block">
+        <h2>Build preview</h2>
+        <p class="muted" style="margin:0 0 8px">Workers Builds deploys merged changes so you can preview the app as it develops.</p>
+        <a class="link" href="{{ p.liveUrl }}" target="_blank" rel="noopener">Open preview &#8599;</a>
+      </div>{% endif %}
+      <div class="block">
+        <h2>Implementation changes</h2>
+        <p class="muted" style="margin:0 0 8px">{{ p.counts.landed }} of {{ p.counts.changes }} landed on main</p>
+        <a class="link" href="/outcomes/{{ o.id }}/changes">Review changes and checks &rarr;</a>
+      </div>
+    </aside>
+  </div>
+
+  {% elsif p.status == "ready_for_launch" %}
+  <!-- ============================ READY ============================ -->
+  <div class="block" style="margin-top:34px">
+    <h2>Ready for launch</h2>
+    <p class="big-line">Build completed in {{ p.summary.elapsed }}</p>
+    <div class="stats" style="margin-top:26px">
+      <div class="stat"><b>{{ p.summary.tasks }}</b><span>tasks completed</span></div>
+      <div class="stat"><b>{{ p.summary.changes }}</b><span>changes landed</span></div>
+      <div class="stat"><b>{{ p.summary.agents }}</b><span>agents contributed</span></div>
+      <div class="stat"><b>{{ p.summary.decisions }}</b><span>human decision{% if p.summary.decisions != 1 %}s{% endif %}</span></div>
+    </div>
+    <p class="muted" style="margin-top:14px">{{ p.summary.checks }} verification checks recorded. <a class="link" href="/outcomes/{{ o.id }}/changes">Review changes and checks &rarr;</a></p>
+  </div>
+  <div class="commit">
+    <p>Launching moves this application into operation.</p>
+    <!--action:LaunchAction|Outcome|{{ o.id }}|/outcomes/{{ o.id }}|Launch|btn primary big|-->
+  </div>
+
+  {% else %}
+  <!-- ============================ OPERATING ============================ -->
+  <div class="liveapp">
+    {% if p.deployment %}
+      <div>
+        {% if p.deployment.live %}<span class="chip operating"><i class="dot"></i>Live on Workers</span>{% else %}<span class="chip building"><i class="dot pulse"></i>Deploying to Workers</span>{% endif %}
+        <h2>{% if p.deployment.live %}The app is running{% else %}Waiting for Workers Builds{% endif %}</h2>
+        <p class="muted">{% if p.deployment.live %}Deployed from commit <code>{{ p.deployment.sha }}</code> by Workers Builds. {{ p.deployment.smokeOk }} of {{ p.deployment.smokeTotal }} pages checked.{% else %}Main is at <code>{{ p.deployment.sha }}</code>; the live app is still on <code>{{ p.deployment.liveSha }}</code>. Workers Builds deploys every push to main.{% endif %}</p>
+        <div class="pages">{% for pg in p.deployment.pages %}{% unless pg.path contains "?" %}<a href="{{ p.deployment.url }}{{ pg.path | remove_first: "/" }}" target="_blank" rel="noopener" class="pg{% unless pg.ok %} bad{% endunless %}">{{ pg.path }}</a>{% endunless %}{% endfor %}</div>
+      </div>
+      <a class="btn primary big" href="{{ p.deployment.url }}" target="_blank" rel="noopener">Open the app &#8599;</a>
+    {% else %}
+      <div><span class="chip building"><i class="dot pulse"></i>Checking the live app</span><h2>Verifying the deployment&hellip;</h2><p class="muted">Checking that the Worker serves the final commit and that every page renders.</p></div>
+    {% endif %}
+  </div>
+
+  <div class="cols even" style="margin-top:34px">
+    <div>
+      {% if p.level == 0 %}
+      <div class="panel good">
+        <h2>Adopt for personal use</h2>
+        <p class="big-line" style="font-size:26px">Make this application part of your own work.</p>
+        <p class="muted" style="margin:6px 0 0">Adoption makes you the owner, responsible for:</p>
+        <ul><li>keeping its purpose and scope clear</li><li>managing its data and access</li><li>ireviewing changes before relying on them</li><li>maintaining it or retiring it when no longer needed</li></ul>
+        <div style="margin-top:22px"><!--action:AdoptAction|Outcome|{{ o.id }}|/outcomes/{{ o.id }}|Adopt for personal use|btn primary big|--></div>
+      </div>
+      {% else %}
+      <div class="panel good">
+        <h2>{{ p.levelLabel }}</h2>
+        <p class="big-line" style="font-size:26px">{{ p.levelStatement }}</p>
+        <p class="muted" style="margin:6px 0 0">Ownership covers the application’s purpose, data, changes, and continued operation.</p>
+      </div>
+      {% endif %}
+    </div>
+    <div>
+      {% if p.level == 1 %}
+      <div class="panel">
+        <h2>Readiness for team use</h2>
+        {% for c in p.level2 %}<div class="check{% if c.ok %} ok{% else %} warn{% endif %}"><i>{% if c.ok %}&#10003;{% else %}!{% endif %}</i>{{ c.label }}</div>{% endfor %}
+        <div style="margin-top:20px"><!--action:PromoteAction|Outcome|{{ o.id }}|/outcomes/{{ o.id }}|Promote to team use|btn|--></div>
+      </div>
+      {% elsif p.live %}
+      <div class="panel"><h2>Build summary</h2>
+        <p class="muted" style="margin:0 0 8px">{{ p.summary.tasks }} tasks, {{ p.summary.changes }} changes, built in {{ p.summary.elapsed }}.</p>
+        <a class="link" href="/outcomes/{{ o.id }}/changes">Artifacts and verification &rarr;</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
